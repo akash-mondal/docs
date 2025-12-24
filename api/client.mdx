@@ -1,0 +1,137 @@
+---
+title: "KrakenClient"
+description: "Main entry point for the SDK"
+---
+
+## Overview
+
+`KrakenClient` is the primary interface for streaming market data. It manages connections, orderbook state, and event distribution.
+
+## Creation
+
+```rust
+use kraken_sdk::prelude::*;
+
+let client = KrakenClient::builder(vec!["BTC/USD".into()])
+    .with_depth(Depth::D10)
+    .with_book(true)
+    .connect()
+    .await?;
+```
+
+See [Builder Configuration](/api/builder) for all options.
+
+## Methods
+
+### Market Data
+
+| Method | Return | Description |
+|--------|--------|-------------|
+| `best_bid(symbol)` | `Option<Decimal>` | Highest bid price |
+| `best_ask(symbol)` | `Option<Decimal>` | Lowest ask price |
+| `spread(symbol)` | `Option<Decimal>` | Ask minus bid |
+| `mid_price(symbol)` | `Option<Decimal>` | (Bid + Ask) / 2 |
+| `orderbook(symbol)` | `Option<OrderbookSnapshot>` | Full orderbook |
+
+```rust
+// Query prices
+if let Some(spread) = client.spread("BTC/USD") {
+    println!("Spread: {}", spread);
+}
+
+if let Some(bid) = client.best_bid("BTC/USD") {
+    println!("Best bid: {}", bid);
+}
+```
+
+### State
+
+| Method | Return | Description |
+|--------|--------|-------------|
+| `is_synced(symbol)` | `bool` | Orderbook valid |
+| `is_connected()` | `bool` | WebSocket open |
+
+```rust
+if client.is_synced("BTC/USD") && client.is_connected() {
+    // Safe to use orderbook data
+}
+```
+
+### Events
+
+```rust
+let mut events = client.events();
+
+while let Some(event) = events.recv().await {
+    // Handle event
+}
+```
+
+<Warning>
+`events()` can only be called once. It takes ownership of the receiver.
+</Warning>
+
+### Lifecycle
+
+```rust
+// Graceful shutdown
+client.shutdown();
+```
+
+## Thread Safety
+
+`KrakenClient` is `Send + Sync`. Safe to share across threads:
+
+```rust
+use std::sync::Arc;
+
+let client = Arc::new(client);
+let client_clone = client.clone();
+
+tokio::spawn(async move {
+    loop {
+        let spread = client_clone.spread("BTC/USD");
+        // ...
+    }
+});
+```
+
+Reads are lock-free. Multiple threads can query simultaneously without blocking.
+
+## Full Example
+
+```rust
+use kraken_sdk::prelude::*;
+use std::sync::Arc;
+use tokio::signal;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = Arc::new(
+        KrakenClient::builder(vec!["BTC/USD".into(), "ETH/USD".into()])
+            .with_depth(Depth::D10)
+            .with_book(true)
+            .connect()
+            .await?
+    );
+
+    // Spawn price monitor
+    let client_monitor = client.clone();
+    tokio::spawn(async move {
+        loop {
+            for symbol in ["BTC/USD", "ETH/USD"] {
+                if let Some(spread) = client_monitor.spread(symbol) {
+                    println!("{}: {}", symbol, spread);
+                }
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    });
+
+    // Wait for shutdown
+    signal::ctrl_c().await?;
+    client.shutdown();
+
+    Ok(())
+}
+```

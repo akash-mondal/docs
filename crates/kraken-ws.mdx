@@ -1,0 +1,112 @@
+---
+title: "kraken-ws"
+description: "WebSocket connection layer with automatic reconnection"
+---
+
+## Overview
+
+`kraken-ws` handles the WebSocket connection to Kraken's Spot API v2. It manages connection lifecycle, subscription state, automatic reconnection, and rate limiting.
+
+```toml
+[dependencies]
+kraken-ws = { git = "https://github.com/hitakshiA/Havklo_sdk" }
+tokio = { version = "1", features = ["full"] }
+```
+
+## Basic Usage
+
+```rust
+use kraken_ws::{KrakenConnection, ConnectionConfig, Channel};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = ConnectionConfig::new()
+        .with_symbols(vec!["BTC/USD".into()])
+        .with_channels(vec![Channel::Book])
+        .with_depth(25);
+
+    let (conn, mut events) = KrakenConnection::connect(config).await?;
+
+    while let Some(event) = events.recv().await {
+        println!("{:?}", event);
+    }
+
+    Ok(())
+}
+```
+
+## Configuration
+
+```rust
+use kraken_ws::{ConnectionConfig, ReconnectConfig, CircuitBreakerConfig};
+use std::time::Duration;
+
+let config = ConnectionConfig::new()
+    // Subscriptions
+    .with_symbols(vec!["BTC/USD".into(), "ETH/USD".into()])
+    .with_channels(vec![Channel::Book, Channel::Ticker])
+    .with_depth(25)
+
+    // Connection
+    .with_timeout(Duration::from_secs(30))
+
+    // Reconnection
+    .with_reconnect(ReconnectConfig {
+        initial_delay: Duration::from_millis(100),
+        max_delay: Duration::from_secs(30),
+        multiplier: 2.0,
+        max_attempts: None,
+    })
+
+    // Circuit breaker
+    .with_circuit_breaker(CircuitBreakerConfig {
+        failure_threshold: 5,
+        reset_timeout: Duration::from_secs(30),
+        half_open_timeout: Duration::from_secs(60),
+    });
+```
+
+## Trading
+
+Place orders via WebSocket (requires authentication):
+
+```rust
+use kraken_ws::trading::{OrderRequest, OrderSide, OrderType};
+
+// Place limit order
+let order = OrderRequest::limit(
+    "BTC/USD",
+    OrderSide::Buy,
+    dec!(1.0),      // qty
+    dec!(50000),    // price
+);
+conn.place_order(order).await?;
+
+// Cancel order
+conn.cancel_order("order_id").await?;
+
+// Cancel all for symbol
+conn.cancel_all_orders("BTC/USD").await?;
+```
+
+## Hooks
+
+Integrate with monitoring:
+
+```rust
+use kraken_ws::Hooks;
+
+let config = ConnectionConfig::new()
+    .with_hooks(
+        Hooks::new()
+            .on_connect(|info| {
+                metrics::increment_counter!("ws_connects");
+            })
+            .on_message(|bytes| {
+                metrics::histogram!("msg_size", bytes as f64);
+            })
+            .on_latency(|micros| {
+                metrics::histogram!("latency_us", micros as f64);
+            })
+    );
+```

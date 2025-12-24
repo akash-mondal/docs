@@ -1,0 +1,184 @@
+---
+title: "Events"
+description: "Understanding the event-driven architecture"
+---
+
+## Event-Driven Design
+
+Havklo delivers all data through a channel-based event system. Your application receives events and reacts - no polling required.
+
+```rust
+let mut events = client.events();
+
+while let Some(event) = events.recv().await {
+    match event {
+        Event::Market(market) => { /* price data */ }
+        Event::Connection(conn) => { /* lifecycle */ }
+        Event::Subscription(sub) => { /* channel status */ }
+        Event::Private(priv_) => { /* account data */ }
+        Event::L3(l3) => { /* order-level */ }
+        Event::BufferOverflow { dropped_count } => { /* backpressure */ }
+    }
+}
+```
+
+## Event Types
+
+<Tabs>
+  <Tab title="Market">
+Real-time market data:
+
+```rust
+pub enum MarketEvent {
+    OrderbookSnapshot {
+        symbol: String,
+        snapshot: OrderbookSnapshot,
+    },
+    OrderbookUpdate {
+        symbol: String,
+        snapshot: OrderbookSnapshot,
+    },
+    ChecksumMismatch {
+        symbol: String,
+        expected: u32,
+        computed: u32,
+    },
+    Heartbeat,
+}
+```
+
+**Usage:**
+```rust
+Event::Market(MarketEvent::OrderbookUpdate { symbol, snapshot }) => {
+    let spread = snapshot.spread();
+    let mid = snapshot.mid_price();
+    println!("{}: spread={:?}, mid={:?}", symbol, spread, mid);
+}
+```
+  </Tab>
+  <Tab title="Connection">
+WebSocket lifecycle:
+
+```rust
+pub enum ConnectionEvent {
+    Connected {
+        api_version: String,
+        connection_id: String,
+    },
+    Disconnected {
+        reason: DisconnectReason,
+    },
+    Reconnecting {
+        attempt: u32,
+        delay: Duration,
+    },
+    ReconnectFailed {
+        error: String,
+    },
+    SubscriptionsRestored {
+        count: usize,
+    },
+    CircuitBreakerOpen {
+        trips: u32,
+    },
+}
+```
+
+**Usage:**
+```rust
+Event::Connection(ConnectionEvent::Disconnected { reason }) => {
+    log::warn!("Connection lost: {:?}", reason);
+}
+Event::Connection(ConnectionEvent::SubscriptionsRestored { count }) => {
+    log::info!("Reconnected, restored {} subscriptions", count);
+}
+```
+  </Tab>
+  <Tab title="Private">
+Authenticated account events:
+
+```rust
+pub enum PrivateEvent {
+    Execution {
+        order_id: String,
+        symbol: String,
+        side: Side,
+        price: Decimal,
+        qty: Decimal,
+        fee: Decimal,
+    },
+    BalanceUpdate {
+        asset: String,
+        balance: Decimal,
+    },
+}
+```
+
+<Note>
+Private events require API key authentication.
+</Note>
+  </Tab>
+</Tabs>
+
+## OrderbookSnapshot
+
+The snapshot contains full orderbook state:
+
+```rust
+pub struct OrderbookSnapshot {
+    pub symbol: String,
+    pub timestamp: String,      // ISO 8601
+    pub bids: Vec<Level>,       // High to low
+    pub asks: Vec<Level>,       // Low to high
+    pub checksum: u32,
+    pub state: OrderbookState,
+}
+
+impl OrderbookSnapshot {
+    pub fn best_bid(&self) -> Option<&Level>;
+    pub fn best_ask(&self) -> Option<&Level>;
+    pub fn spread(&self) -> Option<Decimal>;
+    pub fn mid_price(&self) -> Option<Decimal>;
+}
+```
+
+```rust
+Event::Market(MarketEvent::OrderbookUpdate { symbol, snapshot }) => {
+    // Access computed values
+    let spread = snapshot.spread().unwrap_or_default();
+
+    // Access raw levels
+    for bid in snapshot.bids.iter().take(5) {
+        println!("Bid: {} @ {}", bid.qty, bid.price);
+    }
+}
+```
+
+## Backpressure
+
+The event channel has bounded capacity (default 1024). If your handler is slow:
+
+```rust
+Event::BufferOverflow { dropped_count } => {
+    log::warn!("Dropped {} events - handler too slow", dropped_count);
+}
+```
+
+<Warning>
+`BufferOverflow` means you're not keeping up. Consider processing faster, increasing capacity, or filtering events.
+</Warning>
+
+## Event Filtering
+
+Reduce noise at subscription time:
+
+```rust
+let client = KrakenClient::builder(symbols)
+    .with_event_filter(
+        EventFilter::new()
+            .only_market()        // No connection events
+            .exclude_heartbeats() // No heartbeat spam
+    )
+    .connect()
+    .await?;
+```

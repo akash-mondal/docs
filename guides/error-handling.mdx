@@ -1,0 +1,167 @@
+---
+title: "Error Handling"
+description: "Handling errors gracefully in production"
+---
+
+## Error Types
+
+All SDK errors are variants of `KrakenError`:
+
+```rust
+pub enum KrakenError {
+    // Connection
+    ConnectionFailed { url: String, reason: String },
+    WebSocket(String),
+    Timeout,
+
+    // Data
+    InvalidJson { message: String, raw: String },
+    ChecksumMismatch { symbol: String, expected: u32, computed: u32 },
+
+    // Subscription
+    SubscriptionRejected { channel: String, reason: String },
+
+    // Rate Limiting
+    RateLimited { retry_after: Duration },
+
+    // API
+    ApiError { code: i32, message: String, raw: String, recovery: RecoveryHint },
+
+    // Auth
+    AuthenticationFailed { reason: String },
+    TokenExpired,
+
+    // Trading
+    OrderRejected { reason: String },
+    InsufficientFunds,
+}
+```
+
+## Basic Handling
+
+```rust
+match client.connect().await {
+    Ok(client) => { /* success */ }
+    Err(KrakenError::ConnectionFailed { url, reason }) => {
+        log::error!("Failed to connect to {}: {}", url, reason);
+    }
+    Err(KrakenError::AuthenticationFailed { reason }) => {
+        log::error!("Auth failed: {}", reason);
+    }
+    Err(e) => {
+        log::error!("Unexpected error: {:?}", e);
+    }
+}
+```
+
+## Retry Logic
+
+```rust
+if let Err(e) = some_operation() {
+    if e.is_retryable() {
+        let delay = e.retry_after().unwrap_or(Duration::from_secs(1));
+        tokio::time::sleep(delay).await;
+        // Retry operation
+    } else {
+        // Permanent failure
+        return Err(e);
+    }
+}
+```
+
+## Error Categories
+
+<Tabs>
+  <Tab title="Retryable">
+These errors may succeed on retry:
+
+| Error | Recovery |
+|-------|----------|
+| `ConnectionFailed` | Wait and retry |
+| `RateLimited` | Wait `retry_after` duration |
+| `WebSocket` (some) | Reconnect |
+| `Timeout` | Retry with backoff |
+
+```rust
+if error.is_retryable() {
+    let delay = error.retry_after().unwrap_or(Duration::from_secs(1));
+    tokio::time::sleep(delay).await;
+}
+```
+  </Tab>
+  <Tab title="Permanent">
+These errors require intervention:
+
+| Error | Action |
+|-------|--------|
+| `AuthenticationFailed` | Check credentials |
+| `SubscriptionRejected` | Fix request params |
+| `InvalidJson` | SDK bug or API change |
+| `InsufficientFunds` | Deposit or reduce size |
+
+```rust
+if !error.is_retryable() {
+    log::error!("Permanent error: {:?}", error);
+    // Alert, exit, or escalate
+}
+```
+  </Tab>
+  <Tab title="Automatic">
+The SDK handles these internally:
+
+| Error | SDK Action |
+|-------|------------|
+| `ChecksumMismatch` | Resubscribe for fresh snapshot |
+| `TokenExpired` | Refresh token automatically |
+| Connection drop | Reconnect with backoff |
+
+You'll receive events about these but don't need to handle them.
+  </Tab>
+</Tabs>
+
+## Production Pattern
+
+```rust
+async fn run_with_retry<F, T, E>(
+    operation: F,
+    max_attempts: u32,
+) -> Result<T, E>
+where
+    F: Fn() -> Future<Output = Result<T, E>>,
+    E: IsRetryable,
+{
+    let mut attempts = 0;
+    let mut delay = Duration::from_millis(100);
+
+    loop {
+        match operation().await {
+            Ok(result) => return Ok(result),
+            Err(e) if e.is_retryable() && attempts < max_attempts => {
+                attempts += 1;
+                let wait = e.retry_after().unwrap_or(delay);
+                log::warn!("Attempt {} failed, retrying in {:?}", attempts, wait);
+                tokio::time::sleep(wait).await;
+                delay = (delay * 2).min(Duration::from_secs(30));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+}
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Log Everything" icon="file-lines">
+    Always log the full error, including `raw` fields for API errors.
+  </Card>
+  <Card title="Use is_retryable()" icon="rotate">
+    Don't hardcode retry logic. Use the built-in classification.
+  </Card>
+  <Card title="Handle BufferOverflow" icon="gauge-high">
+    This event means your handler is too slow. Optimize or filter.
+  </Card>
+  <Card title="Don't Swallow Errors" icon="triangle-exclamation">
+    At minimum, log errors you don't handle. Silent failures kill systems.
+  </Card>
+</CardGroup>

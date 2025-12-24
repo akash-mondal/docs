@@ -1,0 +1,135 @@
+---
+title: "Orderbook"
+description: "Orderbook types reference"
+---
+
+## OrderbookSnapshot
+
+Complete orderbook state at a point in time:
+
+```rust
+pub struct OrderbookSnapshot {
+    pub symbol: String,
+    pub timestamp: String,      // ISO 8601
+    pub bids: Vec<Level>,       // Sorted high to low
+    pub asks: Vec<Level>,       // Sorted low to high
+    pub checksum: u32,          // CRC32 for validation
+    pub state: OrderbookState,
+}
+```
+
+### Methods
+
+```rust
+impl OrderbookSnapshot {
+    /// Best (highest) bid price
+    pub fn best_bid(&self) -> Option<&Level>;
+
+    /// Best (lowest) ask price
+    pub fn best_ask(&self) -> Option<&Level>;
+
+    /// Spread: best_ask - best_bid
+    pub fn spread(&self) -> Option<Decimal>;
+
+    /// Mid price: (best_bid + best_ask) / 2
+    pub fn mid_price(&self) -> Option<Decimal>;
+}
+```
+
+### Usage
+
+```rust
+if let Some(snapshot) = client.orderbook("BTC/USD") {
+    // Computed values
+    let spread = snapshot.spread();
+    let mid = snapshot.mid_price();
+
+    // Raw levels
+    for bid in snapshot.bids.iter().take(5) {
+        println!("Bid: {} @ {}", bid.qty, bid.price);
+    }
+
+    // State check
+    if snapshot.state == OrderbookState::Synced {
+        // Data is valid
+    }
+}
+```
+
+## Level
+
+Single price level:
+
+```rust
+pub struct Level {
+    pub price: Decimal,
+    pub qty: Decimal,
+}
+```
+
+## OrderbookState
+
+```rust
+pub enum OrderbookState {
+    /// No data received yet
+    Uninitialized,
+
+    /// Subscribed, waiting for snapshot
+    AwaitingSnapshot,
+
+    /// Receiving updates, data is valid
+    Synced,
+
+    /// Checksum failed, resyncing
+    Desynchronized,
+}
+```
+
+## Depth
+
+```rust
+pub enum Depth {
+    D10 = 10,
+    D25 = 25,
+    D100 = 100,
+    D500 = 500,
+    D1000 = 1000,
+}
+```
+
+## L3Book (Order-Level)
+
+```rust
+pub struct L3Book {
+    // Internal implementation
+}
+
+impl L3Book {
+    pub fn new(symbol: &str, capacity: usize) -> Self;
+
+    pub fn add_order(&mut self, order: L3Order, side: L3Side);
+    pub fn remove_order(&mut self, order_id: &str) -> Option<L3Order>;
+    pub fn modify_order(&mut self, order_id: &str, new_qty: Decimal) -> Result<()>;
+
+    pub fn best_bid(&self) -> Option<Decimal>;
+    pub fn best_ask(&self) -> Option<Decimal>;
+    pub fn spread(&self) -> Option<Decimal>;
+
+    pub fn queue_position(&self, order_id: &str) -> Option<QueuePosition>;
+    pub fn vwap(&self, side: L3Side, qty: Decimal) -> Option<Decimal>;
+
+    pub fn aggregated_bids(&self) -> Vec<Level>;
+    pub fn aggregated_asks(&self) -> Vec<Level>;
+}
+```
+
+## QueuePosition
+
+```rust
+pub struct QueuePosition {
+    pub position: usize,        // 1-indexed
+    pub total_orders: usize,
+    pub volume_ahead: Decimal,
+    pub fill_probability: f64,  // 0.0 - 1.0
+}
+```

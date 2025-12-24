@@ -1,0 +1,75 @@
+---
+title: "kraken-book"
+description: "High-performance orderbook engine"
+---
+
+## Overview
+
+`kraken-book` is the core orderbook engine. Zero async dependencies. Compiles to WASM.
+
+```toml
+[dependencies]
+kraken-book = { git = "https://github.com/hitakshiA/Havklo_sdk" }
+```
+
+## L2 Orderbook
+
+```rust
+use kraken_book::Orderbook;
+
+let mut book = Orderbook::new("BTC/USD", 25);
+
+// Apply snapshot
+book.apply_snapshot(snapshot)?;
+
+// Apply deltas
+book.apply_delta(delta)?;
+
+// Query
+let bid = book.best_bid();
+let ask = book.best_ask();
+let spread = book.spread();
+
+// Validate
+let valid = book.validate_checksum(expected);
+```
+
+## L3 Orderbook
+
+```rust
+use kraken_book::l3::{L3Book, L3Order, L3Side};
+use rust_decimal_macros::dec;
+
+let mut book = L3Book::new("BTC/USD", 1000);
+
+// Add orders
+let order = L3Order::new("order_123", dec!(67000), dec!(1.5));
+book.add_order(order, L3Side::Bid);
+
+// Queue position
+if let Some(pos) = book.queue_position("order_123") {
+    println!("Position: {}/{}", pos.position, pos.total_orders);
+    println!("Volume ahead: {}", pos.volume_ahead);
+}
+
+// VWAP
+let vwap = book.vwap(L3Side::Ask, dec!(10.0));
+```
+
+## Performance
+
+| Operation | L2 | L3 |
+|-----------|----|----|
+| Best bid/ask | 1 ns | 1 ns |
+| Spread | 3.5 ns | 3.5 ns |
+| Apply delta | ~100 ns | ~150 ns |
+| Queue position | - | ~30 ns |
+| VWAP (1 BTC) | - | 28 ns |
+
+## WASM Build
+
+```bash
+cargo build --target wasm32-unknown-unknown -p kraken-book
+```
+
+No special configuration - it just works.

@@ -1,0 +1,117 @@
+---
+title: "Errors"
+description: "Error types and handling"
+---
+
+## KrakenError
+
+```rust
+pub enum KrakenError {
+    // Connection
+    ConnectionFailed { url: String, reason: String },
+    WebSocket(String),
+    Timeout,
+
+    // Data
+    InvalidJson { message: String, raw: String },
+    ChecksumMismatch { symbol: String, expected: u32, computed: u32 },
+
+    // Subscription
+    SubscriptionRejected { channel: String, reason: String },
+
+    // Rate Limiting
+    RateLimited { retry_after: Duration },
+
+    // API
+    ApiError { code: i32, message: String, raw: String, recovery: RecoveryHint },
+
+    // Auth
+    AuthenticationFailed { reason: String },
+    TokenExpired,
+
+    // Trading
+    OrderRejected { reason: String },
+    InsufficientFunds,
+    InvalidSymbol(String),
+}
+```
+
+## Helper Methods
+
+```rust
+impl KrakenError {
+    /// Returns true if the error may succeed on retry
+    pub fn is_retryable(&self) -> bool;
+
+    /// Suggested wait time before retry
+    pub fn retry_after(&self) -> Option<Duration>;
+}
+```
+
+## RecoveryHint
+
+```rust
+pub enum RecoveryHint {
+    RetryAfter(Duration),
+    RefreshAuth,
+    ContactSupport,
+    None,
+}
+```
+
+## Handling Patterns
+
+### Basic
+
+```rust
+match result {
+    Ok(value) => { /* success */ }
+    Err(KrakenError::RateLimited { retry_after }) => {
+        tokio::time::sleep(retry_after).await;
+    }
+    Err(KrakenError::AuthenticationFailed { reason }) => {
+        log::error!("Auth failed: {}", reason);
+    }
+    Err(e) => {
+        log::error!("Error: {:?}", e);
+    }
+}
+```
+
+### With Retry
+
+```rust
+if let Err(e) = operation().await {
+    if e.is_retryable() {
+        let delay = e.retry_after().unwrap_or(Duration::from_secs(1));
+        tokio::time::sleep(delay).await;
+        // Retry
+    }
+}
+```
+
+## Error Categories
+
+### Retryable
+
+| Error | Recovery |
+|-------|----------|
+| `ConnectionFailed` | Wait and retry |
+| `RateLimited` | Wait `retry_after` |
+| `Timeout` | Retry with backoff |
+
+### Permanent
+
+| Error | Action |
+|-------|--------|
+| `AuthenticationFailed` | Fix credentials |
+| `SubscriptionRejected` | Fix parameters |
+| `InvalidSymbol` | Use correct symbol format |
+| `InsufficientFunds` | Deposit or reduce size |
+
+### Automatic
+
+| Error | SDK Action |
+|-------|------------|
+| `ChecksumMismatch` | Auto-resync |
+| `TokenExpired` | Auto-refresh |

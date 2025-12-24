@@ -1,0 +1,165 @@
+---
+title: "Builder"
+description: "Configuration options for KrakenClient"
+---
+
+## Basic
+
+```rust
+let client = KrakenClient::builder(vec!["BTC/USD".into()])
+    .with_depth(Depth::D10)
+    .with_book(true)
+    .connect()
+    .await?;
+```
+
+## Subscriptions
+
+### Symbols
+
+```rust
+// Single symbol
+KrakenClient::builder(vec!["BTC/USD".into()])
+
+// Multiple symbols
+KrakenClient::builder(vec![
+    "BTC/USD".into(),
+    "ETH/USD".into(),
+    "SOL/USD".into(),
+])
+```
+
+<Note>
+Use Kraken's symbol format: `"BTC/USD"` not `"BTCUSD"` or `"BTC-USD"`.
+</Note>
+
+### Depth
+
+```rust
+.with_depth(Depth::D10)   // 10 levels (fastest)
+.with_depth(Depth::D25)   // 25 levels
+.with_depth(Depth::D100)  // 100 levels
+.with_depth(Depth::D500)  // 500 levels
+.with_depth(Depth::D1000) // 1000 levels (most data)
+```
+
+### Channels
+
+```rust
+.with_book(true)      // L2 orderbook
+.with_ticker(true)    // Ticker updates
+.with_trade(true)     // Trade executions
+.with_ohlc(OhlcInterval::M1)  // 1-minute candles
+```
+
+### L3 Orderbook
+
+```rust
+// L3 requires separate endpoint and Kraken approval
+.with_l3(vec!["BTC/USD".into()])
+```
+
+## Connection
+
+### Timeout
+
+```rust
+.with_timeout(Duration::from_secs(30))
+```
+
+### Reconnection
+
+```rust
+use kraken_sdk::ReconnectConfig;
+
+.with_reconnect(ReconnectConfig {
+    initial_delay: Duration::from_millis(100),
+    max_delay: Duration::from_secs(30),
+    multiplier: 2.0,
+    max_attempts: None,  // Unlimited
+})
+
+// Disable reconnection
+.without_reconnect()
+```
+
+### Circuit Breaker
+
+```rust
+use kraken_sdk::CircuitBreakerConfig;
+
+.with_circuit_breaker(CircuitBreakerConfig {
+    failure_threshold: 5,
+    reset_timeout: Duration::from_secs(30),
+    half_open_timeout: Duration::from_secs(60),
+})
+```
+
+## Channel Settings
+
+### Capacity & Backpressure
+
+```rust
+use kraken_sdk::BackpressurePolicy;
+
+.with_channel_capacity(2048, BackpressurePolicy::DropNewest)
+```
+
+| Policy | Behavior |
+|--------|----------|
+| `DropNewest` | Discard incoming when full |
+| `DropOldest` | Discard oldest to make room |
+| `Block` | Block sender until space |
+
+### Event Filtering
+
+```rust
+use kraken_sdk::EventFilter;
+
+.with_event_filter(
+    EventFilter::new()
+        .only_market()
+        .exclude_heartbeats()
+)
+```
+
+## Observability
+
+```rust
+use kraken_sdk::Hooks;
+
+.with_hooks(
+    Hooks::new()
+        .on_connect(|info| log::info!("Connected"))
+        .on_disconnect(|reason| log::warn!("Disconnected: {:?}", reason))
+        .on_latency(|micros| metrics::histogram!("latency", micros))
+)
+```
+
+## Complete Example
+
+```rust
+let client = KrakenClient::builder(vec!["BTC/USD".into(), "ETH/USD".into()])
+    // Subscriptions
+    .with_depth(Depth::D25)
+    .with_book(true)
+    .with_ticker(true)
+
+    // Connection
+    .with_timeout(Duration::from_secs(30))
+    .with_reconnect(ReconnectConfig::default())
+    .with_circuit_breaker(CircuitBreakerConfig::default())
+
+    // Channel
+    .with_channel_capacity(2048, BackpressurePolicy::DropNewest)
+    .with_event_filter(EventFilter::new().exclude_heartbeats())
+
+    // Observability
+    .with_hooks(
+        Hooks::new()
+            .on_connect(|_| log::info!("Connected"))
+    )
+
+    .connect()
+    .await?;
+```

@@ -1,0 +1,167 @@
+---
+title: "Enums"
+description: "Common enumeration types"
+---
+
+## Channel
+
+WebSocket subscription channels:
+
+```rust
+pub enum Channel {
+    /// L2 orderbook updates
+    Book,
+
+    /// Price ticker
+    Ticker,
+
+    /// Trade executions
+    Trade,
+
+    /// OHLC candlesticks
+    Ohlc,
+
+    /// Instrument information
+    Instrument,
+
+    /// L3 order-level data
+    Level3,
+
+    /// Private: order fills
+    Executions,
+
+    /// Private: balance updates
+    Balances,
+}
+```
+
+## Depth
+
+Orderbook depth levels:
+
+```rust
+pub enum Depth {
+    D10 = 10,
+    D25 = 25,
+    D100 = 100,
+    D500 = 500,
+    D1000 = 1000,
+}
+```
+
+## Side
+
+Order/trade side:
+
+```rust
+pub enum Side {
+    Buy,
+    Sell,
+}
+```
+
+## OrderType
+
+```rust
+pub enum OrderType {
+    Market,
+    Limit,
+    StopLoss,
+    TakeProfit,
+    StopLossLimit,
+    TakeProfitLimit,
+}
+```
+
+## OrderStatus
+
+```rust
+pub enum OrderStatus {
+    New,
+    PartiallyFilled,
+    Filled,
+    Canceled,
+    Expired,
+    Rejected,
+}
+```
+
+## TimeInForce
+
+```rust
+pub enum TimeInForce {
+    /// Good until canceled
+    GoodTilCanceled,
+
+    /// Fill immediately or cancel remainder
+    ImmediateOrCancel,
+
+    /// Fill entirely or cancel entirely
+    FillOrKill,
+
+    /// Expires at specified time
+    GoodTilDate(DateTime),
+}
+```
+
+## OrderbookState
+
+```rust
+pub enum OrderbookState {
+    Uninitialized,
+    AwaitingSnapshot,
+    Synced,
+    Desynchronized,
+}
+```
+
+## DisconnectReason
+
+```rust
+pub enum DisconnectReason {
+    /// Clean shutdown
+    Normal,
+
+    /// Connection lost
+    ConnectionLost,
+
+    /// Server closed connection
+    ServerClosed,
+
+    /// Timeout
+    Timeout,
+
+    /// Error occurred
+    Error(String),
+}
+```
+
+## BackpressurePolicy
+
+```rust
+pub enum BackpressurePolicy {
+    /// Drop newest messages when full
+    DropNewest,
+
+    /// Drop oldest messages to make room
+    DropOldest,
+
+    /// Block sender until space available
+    Block,
+}
+```
+
+## OhlcInterval
+
+```rust
+pub enum OhlcInterval {
+    M1,   // 1 minute
+    M5,   // 5 minutes
+    M15,  // 15 minutes
+    M30,  // 30 minutes
+    H1,   // 1 hour
+    H4,   // 4 hours
+    D1,   // 1 day
+    W1,   // 1 week
+}
+```

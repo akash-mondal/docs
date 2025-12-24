@@ -1,0 +1,65 @@
+---
+title: "Crate Overview"
+description: "Choosing the right crate for your use case"
+---
+
+## Quick Decision
+
+<CardGroup cols={2}>
+  <Card title="Full SDK" icon="box" href="/crates/kraken-book">
+    Use `kraken-sdk` for complete applications with high-level API
+  </Card>
+  <Card title="Browser / WASM" icon="globe" href="/crates/kraken-wasm">
+    Use `kraken-wasm` for client-side orderbook processing
+  </Card>
+  <Card title="Low-Level Control" icon="wrench" href="/crates/kraken-ws">
+    Use `kraken-ws` directly for custom connection management
+  </Card>
+  <Card title="Types Only" icon="code" href="/crates/kraken-types">
+    Use `kraken-types` for minimal dependencies, just definitions
+  </Card>
+</CardGroup>
+
+## Dependency Tree
+
+```
+kraken-sdk (268 deps) --- Full application
+├── kraken-ws ─────────── WebSocket client
+│   ├── kraken-book ───── Orderbook engine
+│   │   └── kraken-types - Primitives
+│   └── kraken-types
+├── kraken-futures-ws ─── Futures client
+├── kraken-auth ───────── Authentication
+└── kraken-types
+
+kraken-wasm (35 deps) ─── Browser
+└── kraken-book
+    └── kraken-types
+```
+
+## Comparison
+
+| Crate | Use Case | Async | WASM | Deps |
+|-------|----------|-------|------|------|
+| `kraken-sdk` | Full applications | Yes | No | 268 |
+| `kraken-ws` | Custom WebSocket handling | Yes | No | ~100 |
+| `kraken-futures-ws` | Futures only | Yes | No | ~100 |
+| `kraken-auth` | Auth only | Yes | No | ~50 |
+| `kraken-book` | Orderbook logic only | **No** | **Yes** | 35 |
+| `kraken-types` | Shared types only | **No** | **Yes** | 28 |
+| `kraken-wasm` | Browser JS bindings | **No** | **Yes** | 35 |
+
+## Feature Flags
+
+### kraken-sdk
+
+```toml
+[dependencies]
+kraken-sdk = { git = "...", features = ["metrics", "auth"] }
+```
+
+| Feature | Description |
+|---------|-------------|
+| `metrics` | Prometheus export |
+| `auth` | Authenticated endpoints |
+| `full` | All features |

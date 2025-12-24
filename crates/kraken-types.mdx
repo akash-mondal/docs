@@ -1,0 +1,123 @@
+---
+title: "kraken-types"
+description: "Shared types, enums, and error handling"
+---
+
+## Overview
+
+`kraken-types` contains the foundational types used across all crates. Minimal dependencies. Compiles to WASM.
+
+```toml
+[dependencies]
+kraken-types = { git = "https://github.com/hitakshiA/Havklo_sdk" }
+```
+
+## Core Types
+
+### Level
+
+A price level in the orderbook:
+
+```rust
+use kraken_types::Level;
+use rust_decimal_macros::dec;
+
+let level = Level {
+    price: dec!(67432.50),
+    qty: dec!(1.5),
+};
+```
+
+### Symbol
+
+Validated trading pair:
+
+```rust
+use kraken_types::Symbol;
+
+let symbol = Symbol::new("BTC/USD")?;
+assert_eq!(symbol.base(), "BTC");
+assert_eq!(symbol.quote(), "USD");
+```
+
+## Enums
+
+### Channel
+
+```rust
+pub enum Channel {
+    Book,       // L2 orderbook
+    Ticker,     // Price ticker
+    Trade,      // Trade executions
+    Ohlc,       // Candlesticks
+    Instrument, // Instrument info
+    Level3,     // L3 orderbook
+    Executions, // Private: order fills
+    Balances,   // Private: balance updates
+}
+```
+
+### Depth
+
+```rust
+pub enum Depth {
+    D10 = 10,
+    D25 = 25,
+    D100 = 100,
+    D500 = 500,
+    D1000 = 1000,
+}
+```
+
+### Side
+
+```rust
+pub enum Side {
+    Buy,
+    Sell,
+}
+```
+
+### OrderType
+
+```rust
+pub enum OrderType {
+    Market,
+    Limit,
+    StopLoss,
+    TakeProfit,
+    StopLossLimit,
+    TakeProfitLimit,
+}
+```
+
+## Error Handling
+
+### KrakenError
+
+```rust
+pub enum KrakenError {
+    ConnectionFailed { url: String, reason: String },
+    WebSocket(String),
+    InvalidJson { message: String, raw: String },
+    ChecksumMismatch { symbol: String, expected: u32, computed: u32 },
+    SubscriptionRejected { channel: String, reason: String },
+    RateLimited { retry_after: Duration },
+    ApiError { code: i32, message: String, raw: String, recovery: RecoveryHint },
+    AuthenticationFailed { reason: String },
+    TokenExpired,
+    InvalidSymbol(String),
+    OrderRejected { reason: String },
+    InsufficientFunds,
+    Timeout,
+}
+```
+
+### Helper Methods
+
+```rust
+impl KrakenError {
+    pub fn is_retryable(&self) -> bool;
+    pub fn retry_after(&self) -> Option<Duration>;
+}
+```

@@ -1,0 +1,68 @@
+---
+title: "Changelog"
+description: "Release history"
+---
+
+## v0.1.0
+
+*December 2024*
+
+Initial release of Havklo SDK.
+
+### Features
+
+**Core SDK**
+- `KrakenClient` with builder pattern
+- L2 orderbook (10, 25, 100, 500, 1000 depth)
+- CRC32 checksum validation
+- Automatic reconnection with exponential backoff
+- Circuit breaker pattern
+- Event-driven architecture
+
+**L3 Orderbook**
+- Order-level tracking
+- Queue position calculation
+- VWAP computation
+- Fill probability estimation
+
+**WebSocket Trading**
+- Place, amend, cancel orders
+- Batch operations
+- Order lifecycle tracking
+
+**WASM Support**
+- `kraken-wasm` for browser integration
+- `apply_and_get()` API
+- Same validation as native
+
+**Futures**
+- `kraken-futures-ws` for perpetuals
+- Funding rates, mark prices
+
+### Performance
+
+| Operation | Latency |
+|-----------|---------|
+| Best bid/ask | 1 ns |
+| Spread | 3.5 ns |
+| Apply delta | ~100 ns |
+| L3 queue position | ~30 ns |
+
+### Crate Versions
+
+| Crate | Version |
+|-------|---------|
+| `kraken-sdk` | 0.1.0 |
+| `kraken-ws` | 0.1.0 |
+| `kraken-book` | 0.1.0 |
+| `kraken-types` | 0.1.0 |
+| `kraken-auth` | 0.1.0 |
+| `kraken-futures-ws` | 0.1.0 |
+| `kraken-wasm` | 0.1.0 |
+
+### Live Demos
+
+- [Havsyn](https://havsyn.vercel.app) - Orderbook Visualizer
+- [Havdepth](https://havdepth.vercel.app) - Depth Chart
+- [Havflow](https://havflow.vercel.app) - Order Flow
+- [Havnet](https://havnet.vercel.app) - Multi-Symbol Dashboard

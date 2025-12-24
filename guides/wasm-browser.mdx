@@ -1,0 +1,212 @@
+---
+title: "Browser Integration"
+description: "Run Havklo's orderbook engine in the browser with WebAssembly"
+---
+
+## Overview
+
+The `kraken-book` crate compiles to WebAssembly. The same orderbook logic powering Rust backends runs in browser tabs.
+
+**WASM handles:**
+- Orderbook state management
+- Delta application
+- CRC32 checksum validation
+- Spread/mid-price calculations
+
+**JavaScript handles:**
+- WebSocket connection
+- DOM updates
+- User interaction
+
+## Setup
+
+<Steps>
+<Step title="Build WASM">
+```bash
+cd crates/kraken-wasm
+wasm-pack build --target web
+```
+</Step>
+
+<Step title="Copy to project">
+```bash
+cp -r pkg/ your-app/src/wasm/
+```
+</Step>
+
+<Step title="Configure bundler">
+For Vite:
+```javascript
+// vite.config.js
+import wasm from 'vite-plugin-wasm';
+import topLevelAwait from 'vite-plugin-top-level-await';
+
+export default {
+  plugins: [wasm(), topLevelAwait()]
+}
+```
+</Step>
+</Steps>
+
+## Basic Usage
+
+```javascript
+import init, { WasmOrderbook } from './wasm/kraken_wasm.js';
+
+async function main() {
+  // Initialize WASM (once)
+  await init();
+
+  // Create orderbook
+  const book = WasmOrderbook.with_depth("BTC/USD", 25);
+  book.set_precision(1, 8);
+
+  // Connect to Kraken
+  const ws = new WebSocket('wss://ws.kraken.com/v2');
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({
+      method: 'subscribe',
+      params: { channel: 'book', symbol: ['BTC/USD'], depth: 25 }
+    }));
+  };
+
+  ws.onmessage = (event) => {
+    const result = book.apply_and_get(event.data, 10);
+    if (result) {
+      console.log('Spread:', result.spread);
+      console.log('Top Bid:', result.bids[0]);
+      console.log('Top Ask:', result.asks[0]);
+    }
+  };
+}
+```
+
+## React Integration
+
+```jsx
+import { useState, useEffect, useRef } from 'react';
+import init, { WasmOrderbook } from '../wasm/kraken_wasm.js';
+
+function OrderbookDisplay({ symbol }) {
+  const [orderbook, setOrderbook] = useState({ bids: [], asks: [], spread: null });
+  const bookRef = useRef(null);
+  const wsRef = useRef(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function setup() {
+      await init();
+
+      bookRef.current = WasmOrderbook.with_depth(symbol, 25);
+      bookRef.current.set_precision(1, 8);
+
+      wsRef.current = new WebSocket('wss://ws.kraken.com/v2');
+
+      wsRef.current.onopen = () => {
+        wsRef.current.send(JSON.stringify({
+          method: 'subscribe',
+          params: { channel: 'book', symbol: [symbol], depth: 25 }
+        }));
+      };
+
+      wsRef.current.onmessage = (event) => {
+        if (!mounted) return;
+
+        const result = bookRef.current.apply_and_get(event.data, 10);
+        if (result) {
+          setOrderbook({
+            bids: result.bids,
+            asks: result.asks,
+            spread: result.spread,
+          });
+        }
+      };
+    }
+
+    setup();
+
+    return () => {
+      mounted = false;
+      wsRef.current?.close();
+      bookRef.current?.free();
+    };
+  }, [symbol]);
+
+  return (
+    <div className="orderbook">
+      <div className="spread">Spread: {orderbook.spread}</div>
+      <div className="levels">
+        <div className="bids">
+          {orderbook.bids.map(([price, qty]) => (
+            <div key={price}>{price} | {qty}</div>
+          ))}
+        </div>
+        <div className="asks">
+          {orderbook.asks.map(([price, qty]) => (
+            <div key={price}>{price} | {qty}</div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+## Message Queue Pattern
+
+Prevent WASM borrow conflicts with sequential processing:
+
+```javascript
+const queue = [];
+let processing = false;
+
+ws.onmessage = (event) => {
+  queue.push(event.data);
+  processQueue();
+};
+
+function processQueue() {
+  if (processing || queue.length === 0) return;
+
+  processing = true;
+  while (queue.length > 0) {
+    const msg = queue.shift();
+    const result = book.apply_and_get(msg, 10);
+    if (result) updateUI(result);
+  }
+  processing = false;
+}
+```
+
+<Warning>
+Don't call WASM functions from multiple async contexts simultaneously.
+</Warning>
+
+## Symbol Precision
+
+| Symbol | Price Decimals | Qty Decimals |
+|--------|---------------|--------------|
+| BTC/USD | 1 | 8 |
+| ETH/USD | 2 | 8 |
+| SOL/USD | 2 | 8 |
+| XRP/USD | 5 | 8 |
+| ADA/USD | 6 | 8 |
+
+## Tips
+
+<CardGroup cols={2}>
+  <Card title="Limit Depth" icon="minimize">
+    Request only what you need. 10-25 levels is enough for most UIs.
+  </Card>
+  <Card title="Batch Updates" icon="layer-group">
+    Use requestAnimationFrame for DOM updates, not every message.
+  </Card>
+  <Card title="Reuse Instances" icon="recycle">
+    One WasmOrderbook per symbol. Don't recreate on each message.
+  </Card>
+  <Card title="Cleanup" icon="broom">
+    Call book.free() when unmounting to release WASM memory.
+  </Card>
+</CardGroup>

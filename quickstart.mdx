@@ -1,0 +1,138 @@
+---
+title: "Quick Start"
+description: "Connect to Kraken and stream market data in 5 minutes"
+---
+
+## Installation
+
+Add Havklo to your `Cargo.toml`:
+
+```toml
+[dependencies]
+kraken-sdk = { git = "https://github.com/hitakshiA/Havklo_sdk" }
+tokio = { version = "1", features = ["full"] }
+```
+
+## Stream Your First Orderbook
+
+<Steps>
+
+<Step title="Create the Client">
+
+Use the builder pattern to configure your connection:
+
+```rust
+use kraken_sdk::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = KrakenClient::builder(vec!["BTC/USD".into()])
+        .with_depth(Depth::D10)
+        .with_book(true)
+        .connect()
+        .await?;
+```
+
+</Step>
+
+<Step title="Query Market Data">
+
+Access orderbook state at any time:
+
+```rust
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        if let Some(spread) = client.spread("BTC/USD") {
+            println!("Spread: {}", spread);
+        }
+
+        if let Some(bid) = client.best_bid("BTC/USD") {
+            println!("Best bid: {}", bid);
+        }
+
+        if let Some(ask) = client.best_ask("BTC/USD") {
+            println!("Best ask: {}", ask);
+        }
+    }
+}
+```
+
+</Step>
+
+<Step title="Run It">
+
+```bash
+cargo run
+```
+
+Output:
+
+```
+Spread: 0.50
+Best bid: 67432.50
+Best ask: 67433.00
+```
+
+</Step>
+
+</Steps>
+
+## Process Events
+
+For reactive processing, consume the event stream:
+
+```rust
+use kraken_sdk::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = KrakenClient::builder(vec!["BTC/USD".into()])
+        .with_book(true)
+        .connect()
+        .await?;
+
+    let mut events = client.events();
+
+    while let Some(event) = events.recv().await {
+        match event {
+            Event::Market(MarketEvent::OrderbookSnapshot { symbol, snapshot }) => {
+                println!("{}: Snapshot received", symbol);
+                println!("  Bids: {}, Asks: {}", snapshot.bids.len(), snapshot.asks.len());
+            }
+            Event::Market(MarketEvent::OrderbookUpdate { symbol, snapshot }) => {
+                if let Some(spread) = snapshot.spread() {
+                    println!("{}: Spread = {}", symbol, spread);
+                }
+            }
+            Event::Connection(ConnectionEvent::Disconnected { reason }) => {
+                println!("Disconnected: {:?}", reason);
+            }
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+```
+
+<Tip>
+The SDK automatically validates CRC32 checksums on every update. If a mismatch is detected, it resyncs the orderbook transparently.
+</Tip>
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    Understand how Havklo is structured
+  </Card>
+  <Card title="Multi-Symbol" icon="chart-line" href="/guides/multi-symbol">
+    Track multiple trading pairs
+  </Card>
+  <Card title="Browser / WASM" icon="globe" href="/guides/wasm-browser">
+    Run the orderbook in WebAssembly
+  </Card>
+  <Card title="L3 Orderbook" icon="layer-group" href="/guides/l3-orderbook">
+    Track individual orders with queue position
+  </Card>
+</CardGroup>

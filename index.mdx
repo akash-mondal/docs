@@ -1,0 +1,88 @@
+---
+title: "Havklo"
+description: "Production-grade Rust SDK for Kraken's WebSocket APIs"
+---
+
+# Build Trading Systems That Scale
+
+Havklo is a high-performance Rust SDK for Kraken's WebSocket APIs. Designed for algorithmic trading, market making, and real-time data streaming with sub-microsecond orderbook operations.
+
+The architecture decouples core market logic from the networking layer, allowing the orderbook engine to compile to **WebAssembly**. The same validation logic powering high-frequency backends runs with near-native performance in web browsers.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="play" href="/quickstart">
+    Stream your first orderbook in under 5 minutes
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/architecture">
+    Understand the modular design enabling native + WASM builds
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/client">
+    Complete documentation for KrakenClient
+  </Card>
+  <Card title="Examples" icon="flask" href="/examples/overview">
+    11 runnable examples covering common scenarios
+  </Card>
+</CardGroup>
+
+## Live Demos
+
+These applications run entirely client-side, powered by the WASM-compiled orderbook engine:
+
+| Application | Description | Link |
+|-------------|-------------|------|
+| **Havsyn** | Real-time L2 Orderbook Visualizer | [havsyn.vercel.app](https://havsyn.vercel.app) |
+| **Havdepth** | Cumulative Depth Charting | [havdepth.vercel.app](https://havdepth.vercel.app) |
+| **Havflow** | Order Flow Imbalance Analyzer | [havflow.vercel.app](https://havflow.vercel.app) |
+| **Havnet** | Multi-Symbol Dashboard | [havnet.vercel.app](https://havnet.vercel.app) |
+| **Havwatch** | Price Alert System | [GitHub](https://github.com/hitakshiA/havwatch) |
+
+## Why Havklo?
+
+<CardGroup cols={3}>
+  <Card title="Sub-us Performance" icon="bolt">
+    Best bid lookup in 1 nanosecond. Delta updates in 100 nanoseconds.
+  </Card>
+  <Card title="Financial Precision" icon="calculator">
+    Uses rust_decimal throughout. No floating-point errors in your P&L.
+  </Card>
+  <Card title="Browser Ready" icon="globe">
+    Core engine compiles to WASM. Same code runs native and in-browser.
+  </Card>
+</CardGroup>
+
+## Performance
+
+All benchmarks on Apple M1 Pro using Criterion.rs:
+
+| Operation | Latency | Throughput |
+|-----------|---------|------------|
+| Best bid/ask lookup | 1.0 ns | 1,000,000,000/s |
+| Spread calculation | 3.5 ns | 285,000,000/s |
+| Apply delta update | ~100 ns | 10,000,000/s |
+| Apply full snapshot | 10.0 us | 100,000/s |
+| CRC32 validation | 5.9 us | 169,000/s |
+
+<Note>
+All financial calculations use `rust_decimal` to prevent floating-point errors inherent in `f64` representations.
+</Note>
+
+## What's Included
+
+<Tabs>
+  <Tab title="In Scope">
+    - Kraken WebSocket API v2 (Spot + Futures)
+    - Real-time market data streaming
+    - L2 and L3 orderbook management
+    - WebSocket-based order management
+    - CRC32 checksum validation
+    - Automatic reconnection with circuit breaker
+    - Browser support via WebAssembly
+  </Tab>
+  <Tab title="Not Included">
+    - REST API (use `krakenex` for REST)
+    - Historical data backfill
+    - Portfolio management / P&L tracking
+    - Built-in trading strategies
+    - Cross-exchange abstraction
+  </Tab>
+</Tabs>

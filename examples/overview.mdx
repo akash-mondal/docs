@@ -1,0 +1,227 @@
+---
+title: "Examples"
+description: "Runnable examples covering common use cases"
+---
+
+## Running
+
+```bash
+cargo run --example <name>
+```
+
+All examples connect to live Kraken APIs.
+
+## Index
+
+<CardGroup cols={2}>
+  <Card title="simple_ticker" icon="play">
+    Basic connection, events, shutdown
+  </Card>
+  <Card title="orderbook_stream" icon="book">
+    L2 orderbook with checksums
+  </Card>
+  <Card title="multi_symbol" icon="chart-line">
+    Multiple trading pairs
+  </Card>
+  <Card title="futures_stream" icon="rocket">
+    Perpetuals, funding rates
+  </Card>
+  <Card title="market_maker" icon="scale-balanced">
+    L3 orderbook, queue position
+  </Card>
+  <Card title="advanced_reconnect" icon="rotate">
+    Custom backoff, circuit breaker
+  </Card>
+</CardGroup>
+
+---
+
+## simple_ticker
+
+Basic connection with graceful shutdown:
+
+```rust
+use kraken_sdk::prelude::*;
+use tokio::signal;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = KrakenClient::builder(vec!["BTC/USD".into()])
+        .with_book(true)
+        .connect()
+        .await?;
+
+    let mut events = client.events();
+
+    loop {
+        tokio::select! {
+            Some(event) = events.recv() => {
+                if let Event::Market(MarketEvent::OrderbookUpdate { symbol, snapshot }) = event {
+                    println!("{}: {:?}", symbol, snapshot.spread());
+                }
+            }
+            _ = signal::ctrl_c() => {
+                println!("Shutting down...");
+                client.shutdown();
+                break;
+            }
+        }
+    }
+    Ok(())
+}
+```
+
+```bash
+cargo run --example simple_ticker
+```
+
+---
+
+## orderbook_stream
+
+Full orderbook display with depth levels:
+
+```rust
+use kraken_sdk::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = KrakenClient::builder(vec!["BTC/USD".into()])
+        .with_depth(Depth::D25)
+        .with_book(true)
+        .connect()
+        .await?;
+
+    let mut events = client.events();
+
+    while let Some(event) = events.recv().await {
+        if let Event::Market(MarketEvent::OrderbookUpdate { symbol, snapshot }) = event {
+            println!("\n=== {} ===", symbol);
+
+            println!("Top 5 Bids:");
+            for (i, level) in snapshot.bids.iter().take(5).enumerate() {
+                println!("  {}: {} @ {}", i+1, level.qty, level.price);
+            }
+
+            println!("Top 5 Asks:");
+            for (i, level) in snapshot.asks.iter().take(5).enumerate() {
+                println!("  {}: {} @ {}", i+1, level.qty, level.price);
+            }
+
+            println!("Spread: {:?}", snapshot.spread());
+        }
+    }
+    Ok(())
+}
+```
+
+```bash
+cargo run --example orderbook_stream
+```
+
+---
+
+## multi_symbol
+
+Track multiple symbols with change detection:
+
+```rust
+use kraken_sdk::prelude::*;
+use std::collections::HashMap;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let symbols = vec![
+        "BTC/USD".into(),
+        "ETH/USD".into(),
+        "SOL/USD".into(),
+    ];
+
+    let client = KrakenClient::builder(symbols)
+        .with_depth(Depth::D10)
+        .with_book(true)
+        .connect()
+        .await?;
+
+    let mut events = client.events();
+    let mut last_prices: HashMap<String, Decimal> = HashMap::new();
+
+    while let Some(event) = events.recv().await {
+        if let Event::Market(MarketEvent::OrderbookUpdate { symbol, snapshot }) = event {
+            if let Some(mid) = snapshot.mid_price() {
+                if let Some(&last) = last_prices.get(&symbol) {
+                    let change = ((mid - last) / last * dec!(100)).abs();
+                    if change > dec!(0.01) {
+                        println!("{}: {} ({:+.4}%)", symbol, mid, change);
+                    }
+                }
+                last_prices.insert(symbol, mid);
+            }
+        }
+    }
+    Ok(())
+}
+```
+
+```bash
+cargo run --example multi_symbol
+```
+
+---
+
+## market_maker
+
+L3 orderbook with queue position:
+
+```rust
+use kraken_book::l3::{L3Book, L3Order, L3Side};
+use rust_decimal_macros::dec;
+
+fn main() {
+    let mut book = L3Book::new("BTC/USD", 1000);
+
+    // Simulate adding our order
+    let my_order = L3Order::new("my_order_123", dec!(67000), dec!(0.5));
+    book.add_order(my_order, L3Side::Bid);
+
+    // Add orders ahead of us
+    for i in 0..5 {
+        let order = L3Order::new(&format!("other_{}", i), dec!(67000), dec!(0.1));
+        book.add_order(order, L3Side::Bid);
+    }
+
+    // Check our position
+    if let Some(pos) = book.queue_position("my_order_123") {
+        println!("Queue Position: {} of {}", pos.position, pos.total_orders);
+        println!("Volume Ahead: {} BTC", pos.volume_ahead);
+        println!("Fill Probability: {:.1}%", pos.fill_probability * 100.0);
+    }
+
+    // Calculate VWAP
+    if let Some(vwap) = book.vwap(L3Side::Ask, dec!(1.0)) {
+        println!("VWAP for 1 BTC: {}", vwap);
+    }
+}
+```
+
+```bash
+cargo run --example market_maker
+```
+
+---
+
+## Full List
+
+| Example | Features |
+|---------|----------|
+| `simple_ticker` | Basic connection, `tokio::select!`, shutdown |
+| `orderbook_stream` | L2, checksum validation, depth levels |
+| `multi_symbol` | Multi-symbol streaming |
+| `futures_stream` | Futures WS, funding rates |
+| `market_maker` | L3, queue position, VWAP |
+| `advanced_reconnect` | Reconnection config, backoff |
+| `stream_api` | `impl Stream`, `StreamExt` |
+| `observability_hooks` | Hooks for metrics |
+| `error_handling` | `KrakenError`, recovery |
+| `graceful_shutdown` | Signal handling |
+| `live_validation` | Full SDK validation |

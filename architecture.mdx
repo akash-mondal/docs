@@ -1,0 +1,141 @@
+---
+title: "Architecture"
+description: "Modular design enabling native and WASM builds from a single codebase"
+---
+
+## Design Philosophy
+
+Havklo is built on one core principle: **separate computation from I/O**.
+
+The orderbook engine (`kraken-book`) contains zero networking code and no async runtime dependencies. This enables:
+
+- **Native performance** with Tokio in backend systems
+- **Browser execution** when compiled to WebAssembly
+- **Deterministic testing** without network mocking
+- **Runtime portability** across different async executors
+
+## Crate Hierarchy
+
+```mermaid
+graph TD
+    subgraph "Core Logic - No I/O"
+        Types[kraken-types<br/>Shared Primitives]
+        Book[kraken-book<br/>L2/L3 Engine]
+    end
+
+    subgraph "Async Runtime - Tokio"
+        Auth[kraken-auth<br/>Token Management]
+        SpotWS[kraken-ws<br/>Spot API v2]
+        FutWS[kraken-futures-ws<br/>Futures API]
+    end
+
+    subgraph "Public Interface"
+        SDK[kraken-sdk<br/>Unified Client]
+        WasmPkg[kraken-wasm<br/>JS Bindings]
+    end
+
+    Types --> Book
+    Types --> SpotWS
+    Types --> FutWS
+
+    Book --> SpotWS
+    Book --> WasmPkg
+
+    SpotWS --> SDK
+    FutWS --> SDK
+    Auth --> SDK
+
+    style Book stroke-width:3px,stroke:#7C3AED
+    style WasmPkg stroke-width:3px,stroke:#7C3AED
+```
+
+## Crate Overview
+
+| Crate | Purpose | WASM | Deps |
+|-------|---------|------|------|
+| `kraken-sdk` | Unified high-level API | No | 268 |
+| `kraken-ws` | Spot WebSocket v2 + trading | No | ~100 |
+| `kraken-futures-ws` | Futures perpetuals streaming | No | ~100 |
+| `kraken-auth` | API authentication, token refresh | No | ~50 |
+| `kraken-book` | L2/L3 orderbook engine | **Yes** | 35 |
+| `kraken-types` | Core types, enums, errors | **Yes** | 28 |
+| `kraken-wasm` | JavaScript/TypeScript bindings | **Yes** | 35 |
+
+<Note>
+For browser/WASM usage, only `kraken-book` (35 deps) is needed. The full SDK includes the async runtime, networking, and observability.
+</Note>
+
+## Data Flow
+
+<Tabs>
+  <Tab title="Native (Rust)">
+```mermaid
+sequenceDiagram
+    participant K as Kraken API
+    participant WS as kraken-ws
+    participant B as kraken-book
+    participant A as Your App
+
+    K->>WS: WebSocket Message
+    WS->>B: Parse & Apply
+    B->>B: Validate Checksum
+    B-->>WS: Updated State
+    WS->>A: Event
+```
+  </Tab>
+  <Tab title="Browser (WASM)">
+```mermaid
+sequenceDiagram
+    participant K as Kraken API
+    participant JS as JavaScript
+    participant W as kraken-wasm
+    participant B as kraken-book
+    participant A as React/Vue
+
+    K->>JS: WebSocket Message
+    JS->>W: apply_and_get(msg)
+    W->>B: Parse & Apply
+    B->>B: Validate Checksum
+    B-->>W: Bids, Asks, Spread
+    W-->>JS: Result Object
+    JS->>A: setState()
+```
+  </Tab>
+</Tabs>
+
+## Why This Matters
+
+<CardGroup cols={2}>
+  <Card title="Same Logic Everywhere" icon="equals">
+    CRC32 validation, decimal precision, and state management work identically native and in-browser.
+  </Card>
+  <Card title="Test Once, Run Anywhere" icon="check-double">
+    Unit tests run synchronously against kraken-book without mocking network calls.
+  </Card>
+  <Card title="Minimal Browser Bundle" icon="minimize">
+    Only 35 dependencies compile to WASM. No async runtime bloat.
+  </Card>
+  <Card title="Incremental Adoption" icon="stairs">
+    Use just kraken-types for definitions, or the full SDK for a complete solution.
+  </Card>
+</CardGroup>
+
+## Dependency Strategy
+
+```
+kraken-types (28 deps)
+└── serde, rust_decimal, thiserror
+    └── Minimal, serialization-focused
+
+kraken-book (35 deps)
+└── kraken-types + BTreeMap, VecDeque
+    └── Pure computation, no I/O
+
+kraken-sdk (268 deps)
+└── tokio, tungstenite, dashmap, tracing...
+    └── Full async networking stack
+```
+
+<Tip>
+When building a WASM app, JavaScript handles the WebSocket. The WASM module only runs orderbook logic - no networking compiled into the binary.
+</Tip>

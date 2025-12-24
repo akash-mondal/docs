@@ -1,0 +1,154 @@
+---
+title: "WebSocket Trading"
+description: "Place and manage orders via WebSocket"
+---
+
+## Overview
+
+Havklo supports order management over WebSocket, avoiding REST API latency for time-sensitive operations.
+
+<Note>
+Trading requires API key authentication with appropriate permissions.
+</Note>
+
+## Setup
+
+```rust
+use kraken_sdk::prelude::*;
+
+let client = KrakenClient::builder(vec!["BTC/USD".into()])
+    .with_auth(credentials)  // API key + secret
+    .with_book(true)
+    .connect()
+    .await?;
+```
+
+## Place Orders
+
+### Limit Order
+
+```rust
+use kraken_sdk::trading::{OrderRequest, OrderSide};
+
+let order = OrderRequest::limit(
+    "BTC/USD",
+    OrderSide::Buy,
+    dec!(0.1),      // quantity
+    dec!(65000),    // price
+);
+
+client.place_order(order).await?;
+```
+
+### Market Order
+
+```rust
+let order = OrderRequest::market(
+    "BTC/USD",
+    OrderSide::Sell,
+    dec!(0.1),  // quantity
+);
+
+client.place_order(order).await?;
+```
+
+### With Options
+
+```rust
+let order = OrderRequest::limit("BTC/USD", OrderSide::Buy, dec!(0.1), dec!(65000))
+    .with_client_order_id("my_order_123")
+    .with_time_in_force(TimeInForce::GoodTilCanceled)
+    .post_only();  // Ensure maker order
+
+client.place_order(order).await?;
+```
+
+## Cancel Orders
+
+```rust
+// Cancel by order ID
+client.cancel_order("O123-ABC-DEF").await?;
+
+// Cancel by client order ID
+client.cancel_order_by_client_id("my_order_123").await?;
+
+// Cancel all orders for symbol
+client.cancel_all_orders("BTC/USD").await?;
+```
+
+## Order Events
+
+```rust
+let mut events = client.events();
+
+while let Some(event) = events.recv().await {
+    match event {
+        Event::Private(PrivateEvent::Execution {
+            order_id,
+            symbol,
+            side,
+            price,
+            qty,
+            fee,
+        }) => {
+            println!("Fill: {} {} {} @ {} (fee: {})",
+                side, qty, symbol, price, fee);
+        }
+        Event::Private(PrivateEvent::OrderUpdate {
+            order_id,
+            status,
+            filled_qty,
+            remaining_qty,
+        }) => {
+            println!("Order {}: {:?} (filled: {}, remaining: {})",
+                order_id, status, filled_qty, remaining_qty);
+        }
+        _ => {}
+    }
+}
+```
+
+## Order Status
+
+```rust
+pub enum OrderStatus {
+    New,
+    PartiallyFilled,
+    Filled,
+    Canceled,
+    Expired,
+    Rejected,
+}
+```
+
+## Time in Force
+
+| Value | Description |
+|-------|-------------|
+| `GoodTilCanceled` | Remains until filled or canceled |
+| `ImmediateOrCancel` | Fill immediately, cancel remainder |
+| `FillOrKill` | Fill entirely or cancel entirely |
+| `GoodTilDate(time)` | Expires at specified time |
+
+## Error Handling
+
+```rust
+match client.place_order(order).await {
+    Ok(order_id) => {
+        println!("Order placed: {}", order_id);
+    }
+    Err(KrakenError::InsufficientFunds) => {
+        println!("Not enough balance");
+    }
+    Err(KrakenError::OrderRejected { reason }) => {
+        println!("Rejected: {}", reason);
+    }
+    Err(e) => {
+        println!("Error: {:?}", e);
+    }
+}
+```
+
+<Warning>
+Always implement proper error handling and risk controls when trading.
+</Warning>

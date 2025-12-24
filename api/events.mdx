@@ -1,0 +1,177 @@
+---
+title: "Events"
+description: "Event types reference"
+---
+
+## Event Enum
+
+```rust
+pub enum Event {
+    Market(MarketEvent),
+    Connection(ConnectionEvent),
+    Subscription(SubscriptionEvent),
+    Private(PrivateEvent),
+    L3(L3Event),
+    BufferOverflow { dropped_count: usize },
+}
+```
+
+## MarketEvent
+
+```rust
+pub enum MarketEvent {
+    OrderbookSnapshot {
+        symbol: String,
+        snapshot: OrderbookSnapshot,
+    },
+    OrderbookUpdate {
+        symbol: String,
+        snapshot: OrderbookSnapshot,
+    },
+    Ticker {
+        symbol: String,
+        bid: Decimal,
+        ask: Decimal,
+        last: Decimal,
+        volume: Decimal,
+    },
+    Trade {
+        symbol: String,
+        price: Decimal,
+        qty: Decimal,
+        side: Side,
+        timestamp: String,
+    },
+    ChecksumMismatch {
+        symbol: String,
+        expected: u32,
+        computed: u32,
+    },
+    Heartbeat,
+}
+```
+
+## ConnectionEvent
+
+```rust
+pub enum ConnectionEvent {
+    Connected {
+        api_version: String,
+        connection_id: String,
+    },
+    Disconnected {
+        reason: DisconnectReason,
+    },
+    Reconnecting {
+        attempt: u32,
+        delay: Duration,
+    },
+    ReconnectFailed {
+        error: String,
+    },
+    SubscriptionsRestored {
+        count: usize,
+    },
+    CircuitBreakerOpen {
+        trips: u32,
+    },
+}
+```
+
+## SubscriptionEvent
+
+```rust
+pub enum SubscriptionEvent {
+    Subscribed {
+        channel: Channel,
+        symbol: String,
+    },
+    Unsubscribed {
+        channel: Channel,
+        symbol: String,
+    },
+    Error {
+        channel: Channel,
+        symbol: String,
+        error: String,
+    },
+}
+```
+
+## PrivateEvent
+
+```rust
+pub enum PrivateEvent {
+    Execution {
+        order_id: String,
+        symbol: String,
+        side: Side,
+        price: Decimal,
+        qty: Decimal,
+        fee: Decimal,
+    },
+    OrderUpdate {
+        order_id: String,
+        status: OrderStatus,
+        filled_qty: Decimal,
+        remaining_qty: Decimal,
+    },
+    BalanceUpdate {
+        asset: String,
+        balance: Decimal,
+    },
+}
+```
+
+## OrderbookSnapshot
+
+```rust
+pub struct OrderbookSnapshot {
+    pub symbol: String,
+    pub timestamp: String,
+    pub bids: Vec<Level>,
+    pub asks: Vec<Level>,
+    pub checksum: u32,
+    pub state: OrderbookState,
+}
+
+impl OrderbookSnapshot {
+    pub fn best_bid(&self) -> Option<&Level>;
+    pub fn best_ask(&self) -> Option<&Level>;
+    pub fn spread(&self) -> Option<Decimal>;
+    pub fn mid_price(&self) -> Option<Decimal>;
+}
+```
+
+## Level
+
+```rust
+pub struct Level {
+    pub price: Decimal,
+    pub qty: Decimal,
+}
+```
+
+## Usage Example
+
+```rust
+let mut events = client.events();
+
+while let Some(event) = events.recv().await {
+    match event {
+        Event::Market(MarketEvent::OrderbookUpdate { symbol, snapshot }) => {
+            println!("{}: spread = {:?}", symbol, snapshot.spread());
+        }
+        Event::Connection(ConnectionEvent::Disconnected { reason }) => {
+            log::warn!("Disconnected: {:?}", reason);
+        }
+        Event::Connection(ConnectionEvent::SubscriptionsRestored { count }) => {
+            log::info!("Restored {} subscriptions", count);
+        }
+        Event::BufferOverflow { dropped_count } => {
+            log::error!("Dropped {} events", dropped_count);
+        }
+        _ => {}
+    }
+}
+```

@@ -1,0 +1,131 @@
+---
+title: "kraken-wasm"
+description: "WebAssembly bindings for browser integration"
+---
+
+## Building
+
+```bash
+cd crates/kraken-wasm
+wasm-pack build --target web
+```
+
+Output:
+```
+pkg/
+├── kraken_wasm_bg.wasm  # ~500KB
+├── kraken_wasm.js
+├── kraken_wasm.d.ts
+└── package.json
+```
+
+## JavaScript API
+
+```typescript
+class WasmOrderbook {
+  static new(symbol: string): WasmOrderbook;
+  static with_depth(symbol: string, depth: number): WasmOrderbook;
+
+  set_precision(price_decimals: number, qty_decimals: number): void;
+
+  apply_message(json: string): void;
+  apply_and_get(json: string, levels: number): OrderbookResult | null;
+
+  get_bids(): Array<[string, string]>;
+  get_asks(): Array<[string, string]>;
+  get_spread(): string | null;
+  get_mid_price(): string | null;
+  is_synced(): boolean;
+
+  free(): void;
+}
+
+interface OrderbookResult {
+  bids: Array<[string, string]>;
+  asks: Array<[string, string]>;
+  spread: string | null;
+  mid_price: string | null;
+}
+```
+
+## Usage
+
+```javascript
+import init, { WasmOrderbook } from './pkg/kraken_wasm.js';
+
+await init();
+
+const book = WasmOrderbook.with_depth("BTC/USD", 25);
+book.set_precision(1, 8);
+
+const ws = new WebSocket('wss://ws.kraken.com/v2');
+
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    method: 'subscribe',
+    params: { channel: 'book', symbol: ['BTC/USD'], depth: 25 }
+  }));
+};
+
+ws.onmessage = (event) => {
+  const result = book.apply_and_get(event.data, 10);
+  if (result) {
+    console.log('Spread:', result.spread);
+    console.log('Bids:', result.bids);
+  }
+};
+```
+
+## Symbol Precision
+
+| Symbol | Price | Qty |
+|--------|-------|-----|
+| BTC/USD | 1 | 8 |
+| ETH/USD | 2 | 8 |
+| SOL/USD | 2 | 8 |
+| XRP/USD | 5 | 8 |
+| ADA/USD | 6 | 8 |
+
+```javascript
+book.set_precision(1, 8);  // BTC
+```
+
+## React Example
+
+```jsx
+import { useEffect, useRef, useState } from 'react';
+import init, { WasmOrderbook } from '../wasm/kraken_wasm.js';
+
+function useOrderbook(symbol) {
+  const [data, setData] = useState(null);
+  const bookRef = useRef(null);
+
+  useEffect(() => {
+    let ws;
+
+    async function setup() {
+      await init();
+      bookRef.current = WasmOrderbook.with_depth(symbol, 25);
+
+      ws = new WebSocket('wss://ws.kraken.com/v2');
+      ws.onopen = () => { /* subscribe */ };
+      ws.onmessage = (e) => {
+        const result = bookRef.current.apply_and_get(e.data, 10);
+        if (result) setData(result);
+      };
+    }
+
+    setup();
+    return () => {
+      ws?.close();
+      bookRef.current?.free();
+    };
+  }, [symbol]);
+
+  return data;
+}
+```
+
+<Warning>
+Always call `book.free()` on cleanup to release WASM memory.
+</Warning>

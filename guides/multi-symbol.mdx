@@ -1,0 +1,147 @@
+---
+title: "Multi-Symbol Streaming"
+description: "Track multiple trading pairs simultaneously"
+---
+
+## Overview
+
+Havklo efficiently handles multiple symbols over a single WebSocket connection. Each symbol maintains independent orderbook state.
+
+## Basic Setup
+
+```rust
+use kraken_sdk::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let symbols = vec![
+        "BTC/USD".into(),
+        "ETH/USD".into(),
+        "SOL/USD".into(),
+        "XRP/USD".into(),
+        "ADA/USD".into(),
+    ];
+
+    let client = KrakenClient::builder(symbols)
+        .with_depth(Depth::D10)
+        .with_book(true)
+        .connect()
+        .await?;
+
+    // Query any symbol
+    for symbol in ["BTC/USD", "ETH/USD", "SOL/USD"] {
+        if let Some(spread) = client.spread(symbol) {
+            println!("{}: {}", symbol, spread);
+        }
+    }
+
+    Ok(())
+}
+```
+
+## Event Processing
+
+```rust
+use std::collections::HashMap;
+
+let mut events = client.events();
+let mut prices: HashMap<String, Decimal> = HashMap::new();
+
+while let Some(event) = events.recv().await {
+    if let Event::Market(MarketEvent::OrderbookUpdate { symbol, snapshot }) = event {
+        if let Some(mid) = snapshot.mid_price() {
+            // Track price changes
+            if let Some(&last) = prices.get(&symbol) {
+                let change = ((mid - last) / last * dec!(100)).abs();
+                if change > dec!(0.1) {
+                    println!("{}: {} ({:+.3}%)", symbol, mid, change);
+                }
+            }
+            prices.insert(symbol, mid);
+        }
+    }
+}
+```
+
+## Concurrent Queries
+
+The SDK uses lock-free data structures. Query multiple symbols from different threads:
+
+```rust
+use std::sync::Arc;
+
+let client = Arc::new(client);
+
+// Spawn monitoring tasks for each symbol
+for symbol in ["BTC/USD", "ETH/USD", "SOL/USD"] {
+    let client = client.clone();
+    let symbol = symbol.to_string();
+
+    tokio::spawn(async move {
+        loop {
+            if let Some(spread) = client.spread(&symbol) {
+                println!("{}: spread = {}", symbol, spread);
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    });
+}
+```
+
+## Dashboard Example
+
+```rust
+use kraken_sdk::prelude::*;
+use std::collections::HashMap;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let symbols = vec![
+        "BTC/USD".into(),
+        "ETH/USD".into(),
+        "SOL/USD".into(),
+    ];
+
+    let client = KrakenClient::builder(symbols.clone())
+        .with_depth(Depth::D10)
+        .with_book(true)
+        .connect()
+        .await?;
+
+    loop {
+        // Clear screen
+        print!("\x1B[2J\x1B[H");
+
+        println!("=== Market Dashboard ===\n");
+        println!("{:<10} {:>12} {:>12} {:>10}", "Symbol", "Bid", "Ask", "Spread");
+        println!("{}", "-".repeat(46));
+
+        for symbol in &symbols {
+            let bid = client.best_bid(symbol).map(|d| format!("{:.2}", d)).unwrap_or("-".into());
+            let ask = client.best_ask(symbol).map(|d| format!("{:.2}", d)).unwrap_or("-".into());
+            let spread = client.spread(symbol).map(|d| format!("{:.4}", d)).unwrap_or("-".into());
+
+            println!("{:<10} {:>12} {:>12} {:>10}", symbol, bid, ask, spread);
+        }
+
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+}
+```
+
+## Tips
+
+<CardGroup cols={2}>
+  <Card title="Single Connection" icon="plug">
+    All symbols share one WebSocket. No need for multiple connections.
+  </Card>
+  <Card title="Independent State" icon="layer-group">
+    Each symbol has its own orderbook. Updates don't affect other symbols.
+  </Card>
+  <Card title="Lock-Free Reads" icon="bolt">
+    Query any symbol from any thread without blocking.
+  </Card>
+  <Card title="Automatic Routing" icon="route">
+    The SDK routes messages to the correct orderbook by symbol.
+  </Card>
+</CardGroup>

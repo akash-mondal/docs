@@ -1,0 +1,130 @@
+---
+title: "Financial Precision"
+description: "Why Havklo uses rust_decimal instead of floating point"
+---
+
+## The Problem
+
+Standard `f64` floating-point causes rounding errors:
+
+```rust
+let a: f64 = 0.1;
+let b: f64 = 0.2;
+let sum = a + b;
+
+println!("{}", sum);         // 0.30000000000000004
+println!("{}", sum == 0.3);  // false
+```
+
+In trading systems, these errors compound over thousands of calculations:
+- Incorrect P&L
+- Failed reconciliation
+- Checksum mismatches
+- Audit failures
+
+## The Solution
+
+Havklo uses `rust_decimal` throughout:
+
+```rust
+use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
+
+let a = dec!(0.1);
+let b = dec!(0.2);
+let sum = a + b;
+
+println!("{}", sum);             // 0.3
+println!("{}", sum == dec!(0.3)); // true
+```
+
+<Note>
+`rust_decimal` provides 96-bit decimal representation with up to 28 significant digits - the same precision as .NET's `decimal` type.
+</Note>
+
+## Where It Matters
+
+Every price and quantity in Havklo is `Decimal`:
+
+```rust
+pub struct Level {
+    pub price: Decimal,
+    pub qty: Decimal,
+}
+
+impl OrderbookSnapshot {
+    pub fn spread(&self) -> Option<Decimal>;
+    pub fn mid_price(&self) -> Option<Decimal>;
+}
+```
+
+```rust
+// All SDK methods return Decimal
+let spread: Option<Decimal> = client.spread("BTC/USD");
+let bid: Option<Decimal> = client.best_bid("BTC/USD");
+```
+
+## Scientific Notation
+
+Kraken sometimes sends very small numbers in scientific notation:
+
+```json
+{"price": "1.5e-8", "qty": "1000000"}
+```
+
+Havklo parses these correctly:
+
+```rust
+// Parsed automatically to Decimal
+let price = dec!(0.000000015);  // 1.5e-8
+```
+
+## Performance
+
+`Decimal` is slower than `f64`, but still fast:
+
+| Operation | f64 | Decimal | Overhead |
+|-----------|-----|---------|----------|
+| Addition | ~1 ns | ~5 ns | 5x |
+| Multiplication | ~1 ns | ~10 ns | 10x |
+| Division | ~5 ns | ~30 ns | 6x |
+
+<Tip>
+A 5x slowdown on a 1ns operation is still only 5ns - orders of magnitude faster than network latency.
+</Tip>
+
+## Best Practices
+
+<Steps>
+<Step title="Use the dec! macro">
+```rust
+// Good - compile-time parsing
+let price = dec!(100.50);
+
+// Avoid - runtime parsing
+let price = Decimal::from_str("100.50")?;
+```
+</Step>
+<Step title="Keep calculations in Decimal">
+```rust
+// Good
+let pnl = (exit_price - entry_price) * qty;
+
+// Bad - converting back and forth
+let pnl = (exit.to_f64()? - entry.to_f64()?) * qty.to_f64()?;
+```
+</Step>
+<Step title="Format for display, don't convert">
+```rust
+// Good
+println!("Price: {:.8}", price);
+
+// Bad
+println!("Price: {}", price.to_f64().unwrap());
+```
+</Step>
+</Steps>
+
+<Warning>
+Avoid `to_f64()` unless required by external APIs. Each conversion loses precision.
+</Warning>

@@ -1,0 +1,131 @@
+---
+title: "L3 Orderbook"
+description: "Track individual orders with queue position"
+---
+
+## Overview
+
+Level 3 orderbooks show individual orders, not just aggregated price levels. This enables queue position tracking and order flow analysis.
+
+<Warning>
+L3 data requires special approval from Kraken. Contact their support to enable access for your API key.
+</Warning>
+
+## Setup
+
+```rust
+use kraken_book::l3::{L3Book, L3Order, L3Side};
+use rust_decimal_macros::dec;
+
+let mut book = L3Book::new("BTC/USD", 1000);
+```
+
+## Adding Orders
+
+```rust
+// Add a bid order
+let order = L3Order::new("order_abc", dec!(67000), dec!(1.5));
+book.add_order(order, L3Side::Bid);
+
+// Add multiple orders at same price
+book.add_order(L3Order::new("order_def", dec!(67000), dec!(0.8)), L3Side::Bid);
+book.add_order(L3Order::new("order_ghi", dec!(67000), dec!(0.7)), L3Side::Bid);
+```
+
+## Queue Position
+
+Track where your order sits in the queue:
+
+```rust
+if let Some(pos) = book.queue_position("order_abc") {
+    println!("Position: {} of {}", pos.position, pos.total_orders);
+    println!("Volume ahead: {} BTC", pos.volume_ahead);
+    println!("Fill probability: {:.1}%", pos.fill_probability * 100.0);
+}
+```
+
+### QueuePosition Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `position` | `usize` | 1-indexed position in queue |
+| `total_orders` | `usize` | Total orders at this price |
+| `volume_ahead` | `Decimal` | Quantity that must fill before you |
+| `fill_probability` | `f64` | Estimated fill chance (0.0 - 1.0) |
+
+## VWAP Calculation
+
+Calculate volume-weighted average price:
+
+```rust
+// VWAP to buy 1 BTC
+let vwap_1 = book.vwap(L3Side::Ask, dec!(1.0));
+println!("VWAP for 1 BTC: {:?}", vwap_1);
+
+// VWAP to buy 10 BTC
+let vwap_10 = book.vwap(L3Side::Ask, dec!(10.0));
+println!("VWAP for 10 BTC: {:?}", vwap_10);
+```
+
+## Order Updates
+
+```rust
+// Modify order quantity
+book.modify_order("order_abc", dec!(2.0))?;
+
+// Remove order
+book.remove_order("order_abc")?;
+```
+
+## Aggregated View
+
+Get L2 view from L3 data:
+
+```rust
+// Get aggregated bids (L2 style)
+let bids = book.aggregated_bids();
+for level in bids.iter().take(5) {
+    println!("Bid: {} @ {}", level.qty, level.price);
+}
+
+// Get aggregated asks
+let asks = book.aggregated_asks();
+```
+
+## Market Making Example
+
+```rust
+use kraken_book::l3::{L3Book, L3Order, L3Side};
+
+fn analyze_queue(book: &L3Book, my_order_id: &str) {
+    if let Some(pos) = book.queue_position(my_order_id) {
+        // Check if we're near the front
+        if pos.position <= 3 {
+            println!("Near front of queue - high fill probability");
+        }
+
+        // Check volume ahead
+        if pos.volume_ahead > dec!(10.0) {
+            println!("Warning: {} BTC ahead of us", pos.volume_ahead);
+        }
+
+        // Estimate fill probability
+        if pos.fill_probability > 0.8 {
+            println!("Good queue position - likely to fill");
+        } else if pos.fill_probability < 0.2 {
+            println!("Poor queue position - consider repricing");
+        }
+    }
+}
+```
+
+## Performance
+
+| Operation | Latency |
+|-----------|---------|
+| Best bid/ask | 1 ns |
+| Queue position | ~30 ns |
+| VWAP (1 BTC) | 28 ns |
+| VWAP (10 BTC) | 155 ns |
+| Add order | ~150 ns |
+| Remove order | ~200 ns |

@@ -1,0 +1,107 @@
+---
+title: "Level"
+description: "Price level types"
+---
+
+## Level
+
+A single price level in the orderbook:
+
+```rust
+pub struct Level {
+    /// Price at this level
+    pub price: Decimal,
+
+    /// Total quantity at this price
+    pub qty: Decimal,
+}
+```
+
+### Usage
+
+```rust
+use kraken_types::Level;
+use rust_decimal_macros::dec;
+
+let level = Level {
+    price: dec!(67432.50),
+    qty: dec!(1.5),
+};
+
+println!("Price: {}", level.price);
+println!("Quantity: {}", level.qty);
+```
+
+### In Orderbook
+
+```rust
+// Bids are sorted highest to lowest
+for bid in snapshot.bids.iter() {
+    println!("{} BTC @ ${}", bid.qty, bid.price);
+}
+
+// Asks are sorted lowest to highest
+for ask in snapshot.asks.iter() {
+    println!("{} BTC @ ${}", ask.qty, ask.price);
+}
+```
+
+## L3Order
+
+Individual order (Level 3):
+
+```rust
+pub struct L3Order {
+    pub order_id: String,
+    pub price: Decimal,
+    pub qty: Decimal,
+    pub timestamp: String,
+}
+
+impl L3Order {
+    pub fn new(order_id: &str, price: Decimal, qty: Decimal) -> Self;
+}
+```
+
+### Usage
+
+```rust
+use kraken_book::l3::{L3Order, L3Book, L3Side};
+use rust_decimal_macros::dec;
+
+let order = L3Order::new("order_123", dec!(67000), dec!(0.5));
+
+let mut book = L3Book::new("BTC/USD", 1000);
+book.add_order(order, L3Side::Bid);
+```
+
+## L3Side
+
+```rust
+pub enum L3Side {
+    Bid,
+    Ask,
+}
+```
+
+## Decimal Precision
+
+All prices and quantities use `rust_decimal::Decimal`:
+
+```rust
+use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
+
+// Compile-time decimal
+let price = dec!(67432.50);
+
+// Runtime parsing
+let price = Decimal::from_str("67432.50")?;
+
+// Arithmetic is exact
+let total = price * dec!(1.5);  // 101148.75 exactly
+```
+
+<Note>
+Never use `f64` for financial calculations. Floating-point arithmetic causes rounding errors that compound over time.
+</Note>
