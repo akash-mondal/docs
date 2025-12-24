@@ -5,10 +5,7 @@
   "colors": {
     "primary": "#7C3AED",
     "light": "#A78BFA",
-    "dark": "#5B21B6",
-    "background": {
-      "dark": "#0A0A0B"
-    }
+    "dark": "#5B21B6"
   },
   "logo": {
     "dark": "/logo/dark.svg",
@@ -24,106 +21,60 @@
   },
   "navigation": [
     {
-      "tab": "Documentation",
-      "groups": [
-        {
-          "group": "Getting Started",
-          "icon": "rocket",
-          "pages": ["index", "quickstart", "architecture"]
-        },
-        {
-          "group": "Core Concepts",
-          "icon": "book",
-          "pages": [
-            "concepts/orderbook",
-            "concepts/events",
-            "concepts/reconnection",
-            "concepts/precision"
-          ]
-        },
-        {
-          "group": "Crates",
-          "icon": "cube",
-          "pages": [
-            "crates/overview",
-            "crates/kraken-book",
-            "crates/kraken-ws",
-            "crates/kraken-types",
-            "crates/kraken-wasm"
-          ]
-        }
+      "group": "Getting Started",
+      "pages": ["index", "quickstart", "architecture"]
+    },
+    {
+      "group": "Core Concepts",
+      "pages": [
+        "concepts/orderbook",
+        "concepts/events",
+        "concepts/reconnection",
+        "concepts/precision"
       ]
     },
     {
-      "tab": "Guides",
-      "groups": [
-        {
-          "group": "Tutorials",
-          "icon": "map",
-          "pages": [
-            "guides/multi-symbol",
-            "guides/l3-orderbook",
-            "guides/wasm-browser",
-            "guides/trading",
-            "guides/error-handling"
-          ]
-        },
-        {
-          "group": "Examples",
-          "icon": "flask",
-          "pages": ["examples/overview"]
-        }
+      "group": "Crates",
+      "pages": [
+        "crates/overview",
+        "crates/kraken-book",
+        "crates/kraken-ws",
+        "crates/kraken-types",
+        "crates/kraken-wasm"
       ]
     },
     {
-      "tab": "API Reference",
-      "groups": [
-        {
-          "group": "SDK",
-          "icon": "rectangle-terminal",
-          "pages": [
-            "api/client",
-            "api/builder",
-            "api/events",
-            "api/errors"
-          ]
-        },
-        {
-          "group": "Types",
-          "icon": "code",
-          "pages": [
-            "api/orderbook",
-            "api/level",
-            "api/enums"
-          ]
-        }
+      "group": "Guides",
+      "pages": [
+        "guides/multi-symbol",
+        "guides/l3-orderbook",
+        "guides/wasm-browser",
+        "guides/trading",
+        "guides/error-handling"
       ]
     },
     {
-      "tab": "Changelog",
-      "groups": [
-        {
-          "group": "",
-          "pages": ["changelog"]
-        }
+      "group": "Examples",
+      "pages": ["examples/overview"]
+    },
+    {
+      "group": "API Reference",
+      "pages": [
+        "api/client",
+        "api/builder",
+        "api/events",
+        "api/errors",
+        "api/orderbook",
+        "api/level",
+        "api/enums"
       ]
+    },
+    {
+      "group": "Changelog",
+      "pages": ["changelog"]
     }
   ],
-  "footer": {
-    "socials": {
-      "github": "https://github.com/hitakshiA/Havklo_sdk"
-    }
-  },
-  "anchors": [
-    {
-      "anchor": "GitHub",
-      "href": "https://github.com/hitakshiA/Havklo_sdk",
-      "icon": "github"
-    },
-    {
-      "anchor": "Live Demos",
-      "href": "https://havsyn.vercel.app",
-      "icon": "browser"
-    }
-  ]
+  "footerSocials": {
+    "github": "https://github.com/hitakshiA/Havklo_sdk"
+  }
 }
