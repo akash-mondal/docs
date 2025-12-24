@@ -13,67 +13,100 @@
     "href": "https://github.com/hitakshiA/Havklo_sdk"
   },
   "favicon": "/favicon.svg",
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/hitakshiA/Havklo_sdk"
-    }
+  "navigation": {
+    "languages": [
+      {
+        "language": "en",
+        "tabs": [
+          {
+            "tab": "Documentation",
+            "groups": [
+              {
+                "group": "Getting Started",
+                "icon": "rocket",
+                "pages": ["index", "quickstart", "architecture"]
+              },
+              {
+                "group": "Core Concepts",
+                "icon": "book",
+                "pages": [
+                  "concepts/orderbook",
+                  "concepts/events",
+                  "concepts/reconnection",
+                  "concepts/precision"
+                ]
+              },
+              {
+                "group": "Crates",
+                "icon": "cube",
+                "pages": [
+                  "crates/overview",
+                  "crates/kraken-book",
+                  "crates/kraken-ws",
+                  "crates/kraken-types",
+                  "crates/kraken-wasm"
+                ]
+              }
+            ]
+          },
+          {
+            "tab": "Guides",
+            "groups": [
+              {
+                "group": "Tutorials",
+                "icon": "map",
+                "pages": [
+                  "guides/multi-symbol",
+                  "guides/l3-orderbook",
+                  "guides/wasm-browser",
+                  "guides/trading",
+                  "guides/error-handling"
+                ]
+              },
+              {
+                "group": "Examples",
+                "icon": "flask",
+                "pages": ["examples/overview"]
+              }
+            ]
+          },
+          {
+            "tab": "API Reference",
+            "groups": [
+              {
+                "group": "SDK",
+                "icon": "code",
+                "pages": [
+                  "api/client",
+                  "api/builder",
+                  "api/events",
+                  "api/errors"
+                ]
+              },
+              {
+                "group": "Types",
+                "icon": "brackets-curly",
+                "pages": [
+                  "api/orderbook",
+                  "api/level",
+                  "api/enums"
+                ]
+              }
+            ]
+          },
+          {
+            "tab": "Changelog",
+            "groups": [
+              {
+                "group": "Updates",
+                "pages": ["changelog"]
+              }
+            ]
+          }
+        ]
+      }
+    ]
   },
-  "navigation": [
-    {
-      "group": "Getting Started",
-      "pages": ["index", "quickstart", "architecture"]
-    },
-    {
-      "group": "Core Concepts",
-      "pages": [
-        "concepts/orderbook",
-        "concepts/events",
-        "concepts/reconnection",
-        "concepts/precision"
-      ]
-    },
-    {
-      "group": "Crates",
-      "pages": [
-        "crates/overview",
-        "crates/kraken-book",
-        "crates/kraken-ws",
-        "crates/kraken-types",
-        "crates/kraken-wasm"
-      ]
-    },
-    {
-      "group": "Guides",
-      "pages": [
-        "guides/multi-symbol",
-        "guides/l3-orderbook",
-        "guides/wasm-browser",
-        "guides/trading",
-        "guides/error-handling"
-      ]
-    },
-    {
-      "group": "Examples",
-      "pages": ["examples/overview"]
-    },
-    {
-      "group": "API Reference",
-      "pages": [
-        "api/client",
-        "api/builder",
-        "api/events",
-        "api/errors",
-        "api/orderbook",
-        "api/level",
-        "api/enums"
-      ]
-    },
-    {
-      "group": "Changelog",
-      "pages": ["changelog"]
-    }
-  ],
   "footerSocials": {
     "github": "https://github.com/hitakshiA/Havklo_sdk"
   }
